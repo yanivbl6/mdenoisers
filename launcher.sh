@@ -1,0 +1,9 @@
+#!/bin/bash
+extra=" --spectral-norm"
+
+CUDA_VISIBLE_DEVICES=4 python mnist.py -L 8 --lr 0.5  -w 1 $extra --name NR-4-10 --no-cosine --no-skips --single --momentum 0.0 --no-nesterov --epochs 10000 --arch dbl-fc --no-skips --save-model --wd 0.0 --sigma `python -c 'import numpy; a = numpy.logspace(0,-2,10); print (a[4])'` > /tmp/log1 2> /tmp/log1 &
+CUDA_VISIBLE_DEVICES=5 python mnist.py -L 8 --lr 0.5  -w 1 $extra --name NR-5-10 --no-cosine --no-skips --single --momentum 0.0 --no-nesterov --epochs 10000 --arch dbl-fc --no-skips --save-model --wd 0.0 --sigma `python -c 'import numpy; a = numpy.logspace(0,-2,10); print (a[5])'` > /dev/null 2> /dev/null & 
+CUDA_VISIBLE_DEVICES=6 python mnist.py -L 8 --lr 0.5  -w 1 $extra --name NR-6-10 --no-cosine --no-skips --single --momentum 0.0 --no-nesterov --epochs 10000 --arch dbl-fc --no-skips --save-model --wd 0.0 --sigma `python -c 'import numpy; a = numpy.logspace(0,-2,10); print (a[6])'` > /dev/null 2> /dev/null & 
+CUDA_VISIBLE_DEVICES=7 python mnist.py -L 8 --lr 0.5  -w 1 $extra --name NR-7-10 --no-cosine --no-skips --single --momentum 0.0 --no-nesterov --epochs 10000 --arch dbl-fc --no-skips --save-model --wd 0.0 --sigma `python -c 'import numpy; a = numpy.logspace(0,-2,10); print (a[7])'` > /dev/null 2> /dev/null & 
+CUDA_VISIBLE_DEVICES=2 python mnist.py -L 8 --lr 0.5  -w 1 $extra --name NR-8-10 --no-cosine --no-skips --single --momentum 0.0 --no-nesterov --epochs 10000 --arch dbl-fc --no-skips --save-model --wd 0.0 --sigma `python -c 'import numpy; a = numpy.logspace(0,-2,10); print (a[8])'` > /dev/null 2> /dev/null & 
+CUDA_VISIBLE_DEVICES=3 python mnist.py -L 8 --lr 0.5  -w 1 $extra --name NR-9-10 --no-cosine --no-skips --single --momentum 0.0 --no-nesterov --epochs 10000 --arch dbl-fc --no-skips --save-model --wd 0.0 --sigma `python -c 'import numpy; a = numpy.logspace(0,-2,10); print (a[9])'` > /dev/null 2> /dev/null & 
