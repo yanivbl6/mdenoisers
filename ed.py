@@ -344,9 +344,9 @@ def norm_act(input_net, output_net):
     input_net_shape = input_net.shape
     input_net = input_net.view(input_net.size(0), -1)
     output_net = output_net.view(output_net.size(0), -1)
-    frac = (torch.norm(input_net, dim=1)**2)/((input_net*input_out).sum(dim=1)+epsilon)
+    frac = (torch.norm(input_net, dim=1)**2)/((input_net*output_net).sum(dim=1)+epsilon)
     output_net = output_net * (1 - torch.nn.functional.relu(1-frac) -
-                               (torch.nn.functional.relu((-input_net*input_out).sum(dim=1))/((input_net*input_out).sum(dim=1)+epsilon))*(1-frac)).unsqueeze(1)
+                               (torch.nn.functional.relu((-input_net*output_net).sum(dim=1))/((input_net*output_net).sum(dim=1)+epsilon))*(1-frac)).unsqueeze(1)
     return output_net.view(input_net_shape)
 
 
