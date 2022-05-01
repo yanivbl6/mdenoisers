@@ -122,8 +122,9 @@ parser.add_argument('-a', '--act', default="relu", type=str,
 parser.add_argument('--dataset', default="mnist", type=str,
                     help='activation')
 
-parser.add_argument('--sigma', default=1.25, type=float, help='momentum')
-parser.add_argument('--Sigma', default=-1, type=int, help='momentum')
+
+parser.add_argument('--noise-up', default=1, type=float, help='Noise level Up (default: 1.00)')
+parser.add_argument('--noise-down', default=0.01, type=float, help='Noise level Down (default: 0.01)')
 
 
 
@@ -182,8 +183,7 @@ def auto_name(args):
     ##if not args.optim == "sgd":
     txt = txt + f"{args.optim}_"
 
-    if args.Sigma < 0:
-        txt = txt + f"sigma{args.sigma}_"
+    txt = txt + f"{args.noise_down}-{args.noise_up}_"
 
     if len(args.name) > 0:
         txt = txt + args.name
@@ -201,10 +201,9 @@ def get_model(args):
 
     utils.set_seed(args.seed)
 
-    if args.Sigma >= 0:
-        args.sigma = float("%.02f" % np.logspace(0,-2,10)[args.Sigma])
 
-    print(args.sigma)
+    print(args.noise_down)
+    print(args.noise_up)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -340,11 +339,11 @@ def main():
 
     loss_lst = []
     test_loss_lst = []
-
+    noise_range = (args.noise_down, args.noise_up)
     for epoch in range(args.start_epoch,args.epochs):
 
-        train_loss = train(dl_train, model, args.sigma, optimizer, scheduler, epoch, device, writer, zpack)
-        test_loss = test(dl_val, model, args.sigma, device, epoch , writer)
+        train_loss = train(dl_train, model, noise_range  , optimizer, scheduler, epoch, device, writer, zpack)
+        test_loss = test(dl_val, model, noise_range, device, epoch , writer)
         loss_lst.append(train_loss)
         test_loss_lst.append(test_loss)
         if epoch in [100,200,500,1000]:
@@ -383,7 +382,7 @@ def main():
         torch.save(model.state_dict(), save_path + "/ED.pt")
 
 
-def train(train_loader, model, sigma, optimizer, scheduler, epoch, device, writer=None, zpack = None):
+def train(train_loader, model, noise_range, optimizer, scheduler, epoch, device, writer=None, zpack = None):
     """Train for one epoch on the training set"""
     # switch to train mode
     model.train()
@@ -408,13 +407,15 @@ def train(train_loader, model, sigma, optimizer, scheduler, epoch, device, write
             zoptimizer.step()
             ztrain_loss += zloss.item()
             second_loss = (zout.detach().norm().item() >= 1)
-
+        
         optimizer.zero_grad()
         input = input.to(device)
-
+        input = input / torch.sqrt((input**2).sum(dim=[1,2,3], keepdim= True))
+        sigma = torch.rand([input.size(0),1,1,1],device = device)*(noise_range[1]-noise_range[0]) + noise_range[0] 
 
         noise = torch.randn(input.shape, device = device) *sigma
-        output = model(input + noise)
+        output = model((input + noise)/sigma**2)
+
 
 
         loss = ((output - input)**2).mean()
@@ -442,7 +443,7 @@ def train(train_loader, model, sigma, optimizer, scheduler, epoch, device, write
 
     return train_loss/(i+1)
 
-def test(test_loader, model, sigma, device, epoch, writer=None):
+def test(test_loader, model, noise_range, device, epoch, writer=None):
     """Perform test on the test set"""
     # switch to evaluate mode
     model.eval()
@@ -453,9 +454,13 @@ def test(test_loader, model, sigma, device, epoch, writer=None):
 
         # compute output
         with torch.no_grad():
+
+            input = input / torch.sqrt((input**2).sum(dim=[1,2,3], keepdim= True))
+            sigma = torch.rand([input.size(0),1,1,1],device = device)*(noise_range[1]-noise_range[0]) + noise_range[0] 
             noise = torch.randn(input.shape, device = device) *sigma
-            output = model(input + noise)
+            output = model(((input + noise)/sigma)**2)
             loss = ((output - input)**2).mean()
+
 
 
         test_loss += loss.item()

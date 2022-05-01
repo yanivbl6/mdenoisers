@@ -18,7 +18,9 @@ parser.add_argument('--epochs', default=1000, type=int, help='epochs (default: 1
 parser.add_argument('--lr', default=5e-1, type=float, help='lr (default: 5e-1)')
 parser.add_argument('--seed', default=-0, type=int, help='random seed (default: random)')
 parser.add_argument('--file-name', default='test', help='save file name (default: test)')
-parser.add_argument('--noise-std', default=1.25, type=float, help='Noise level (default: 1.25)')
+parser.add_argument('--noise-up', default=1, type=float, help='Noise level Up (default: 1.00)')
+parser.add_argument('--noise-down', default=0.01, type=float, help='Noise level Down (default: 0.01)')
+
 parser.add_argument('--m', default=6, type=int, help='Number of layers (default: 6)') ##
 parser.add_argument('--i', default='y', help='Identity initialization (y or n)')
 parser.add_argument('--cont', action='store_true', default=False,
@@ -50,7 +52,7 @@ def get_model2(args):
     lr = args.lr
     momentum = 0
     log_interval = 100
-    noise_std = args.noise_std
+    
     Global_filename = 'globalsave'+args.file_name+'.pkl'
     filename = 'cp'+ args.file_name+'.pt'
     log_filename = 'log'+ args.file_name+'.txt'
@@ -110,7 +112,7 @@ def get_model2(args):
         myModel.load_state_dict(state_dict)
         myModel.eval()
 
-    return myModel, train_loader, test_loader, dev, args.file_name, save_path
+    return myModel, train_loader, test_loader, dev, args.file_name, save_path, (args.noise_down, args.noise_up)
 
 
 
@@ -123,20 +125,24 @@ if __name__ == '__main__':
 
     #  Seed
     args = parser.parse_args()
-    myModel, train_loader, test_loader, device, args.file_name, save_path = get_model2(args)
+    myModel, train_loader, test_loader, device, args.file_name, save_path, noise_range = get_model2(args)
 
 
     # Training function
-    def train(model, device, train_loader, optimizer, epoch):
+    def train(model, device, train_loader, optimizer, epoch, noise_range):
         model.train()
         train_loss = 0
         print('m = '+str(m) + ', lr = ' + str(lr) + ', dev = ' + dev)
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
+            data = data - data-dataMean.view(1, 1, 28, 28)
+            data = data / torch.sqrt((data**2).sum(dim=[1,2], keepdim= True))
+
             optimizer.zero_grad()
+            noise_std = torch.rand()*(noise_range[1]-noise_range[0]) + noise_range[0] 
             noise = torch.normal(0, noise_std,  size=data.size(), device=device)
-            output = model(data-dataMean.view(1, 1, 28, 28)+noise)
-            loss = F.mse_loss(output, data.view(data.size(0), -1)-dataMean.view(1, -1))
+            output = model((data+noise)/noise_std**2)
+            loss = F.mse_loss(output, data.view(data.size(0), -1))
             train_loss += loss*len(data)
             loss.backward()
             optimizer.step()
@@ -149,15 +155,19 @@ if __name__ == '__main__':
         return train_loss.item()/len(train_loader.dataset)
 
     # Testing function
-    def test(model, device, test_loader):
+    def test(model, device, test_loader, noise_range):
         model.eval()
         err = 0
         with torch.no_grad():
             for data, target in test_loader:
                 data, target = data.to(device), target.to(device)
+                data = data - data-dataMean.view(1, 1, 28, 28)
+                data = data / torch.sqrt((data**2).sum(dim=[1,2], keepdim= True))
+                noise_std = torch.rand()*(noise_range[1]-noise_range[0]) + noise_range[0] 
                 noise = torch.normal(0, noise_std, size=data.size(), device=device)
-                output = model(data-dataMean.view(1, 1, 28, 28)+noise)
-                err += F.mse_loss(output, data.view(data.size(0), -1)-dataMean.view(1, -1))*len(data)
+                output = model((data+noise)/noise_std**2)
+                err += F.mse_loss(output, data.view(data.size(0), -1))*len(data)
+
         if DBUG:
             test_image = data[1]
             test_image = test_image.to(dev)
@@ -200,13 +210,13 @@ if __name__ == '__main__':
         # if epoch == 130:
         #     for g in myGD.param_groups:
         #         g['lr'] = 10e-2
-        TrainingError[0, epoch] = train(myModel, dev, train_loader, myGD, epoch)
+        TrainingError[0, epoch] = train(myModel, dev, train_loader, myGD, epoch, noise_range)
         LayerNorm = np.zeros((1, m))
         for ii in range(m):
             LayerNorm[0, ii] = myModel.hidden[ii](torch.eye(784, device=dev)).cpu().detach().norm().numpy()
         print(LayerNorm)
 
-        TestError[0, epoch] = test(myModel, dev, test_loader)
+        TestError[0, epoch] = test(myModel, dev, test_loader, noise_range)
 
         if DBUG:
             Training_line.set_data(np.arange(epoch+1), TrainingError[0, 0:epoch+1])
@@ -222,6 +232,8 @@ if __name__ == '__main__':
     # -------------------------- Lambda max -------------------------- #
     TrainData = train_loader.dataset.data.float()/255
     TrainData = TrainData.to(dev)
+    noise_std = torch.rand()*(noise_range[1]-noise_range[0]) + noise_range[0] 
+
     noise = torch.normal(0, noise_std, size=TrainData.size(), device=dev)
     NoisyTrainData = TrainData+noise
     NoisyTrainData.requires_grad = False

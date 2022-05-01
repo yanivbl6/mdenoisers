@@ -338,16 +338,13 @@ class ED_FC(nn.Module):
         x = x.view(src_shape)
         return x
 
+def norm_act(x, epsilon = 1e-5):
+    xnorm2 = torch.sqrt((x.detach()**2).sum(dim = [1,2,3], keepdim=  True)) + epsilon
+    factor =  1.0-torch.nn.functional.relu(1.0-1.0/xnorm2)
+    return factor*x
 
-def norm_act(input_net, output_net):
-    epsilon = 1e-5
-    input_net_shape = input_net.shape
-    input_net = input_net.view(input_net.size(0), -1)
-    output_net = output_net.view(output_net.size(0), -1)
-    frac = (torch.norm(input_net, dim=1)**2)/((input_net*output_net).sum(dim=1)+epsilon)
-    output_net = output_net * (1 - torch.nn.functional.relu(1-frac) -
-                               (torch.nn.functional.relu((-input_net*output_net).sum(dim=1))/((input_net*output_net).sum(dim=1)+epsilon))*(1-frac)).unsqueeze(1)
-    return output_net.view(input_net_shape)
+
+
 
 
 class NormAct(nn.Module):
@@ -361,9 +358,9 @@ class dbl_FC(nn.Module):
     def __init__(self, input_size, layers, dbl = True, spectralNorm = False, use_output_activation = False):
         self.use_output_activation = use_output_activation
         if self.use_output_activation:
-            self.normact = lambda x, y: norm_act(x, y)
+            self.normact = lambda x: norm_act(x)
         else:
-            self.normact = lambda x, y: y
+            self.normact = lambda x: x
         d_size = input_size*input_size
         super(dbl_FC, self).__init__()
         self.depth = layers
@@ -413,9 +410,9 @@ class dbl_FC(nn.Module):
 
             W = self.linops[0].weight
             output_T = F.linear(output_T, torch.transpose(W,0,1))
-            return self.normact(input ,(output/2 + output_T/2).view(input.shape))
+            return self.normact((output/2 + output_T/2).view(input.shape))
         else:
-            return self.normact(input, (output).view(input.shape))
+            return self.normact((output).view(input.shape))
 
 
 # test()
