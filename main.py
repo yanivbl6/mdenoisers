@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 
 
+from get_images import generate_denoiser_images
+
 def get_noise(data, min_sigma, max_sigma, device):
     noise = torch.randn_like(data, device=device)
     n = noise.shape[0]
@@ -235,6 +237,8 @@ def main():
     save_loss_figure(train_loss_lst, test_loss_lst, save_path, args.epochs)
     save_analysis_plot_denoiser_residual(model, args.sigma_min, args.sigma_max, save_path, criterion, test_loader, device)
 
+    for sigma_for_generation in np.logspace(0,-2,10):
+        generate_denoiser_images(test_loader, [model], sigma = sigma_for_generation, device = device, path = save_path,  labels = ["mnist_denoiser"], img_idxes = None)
 
 if __name__ == '__main__':
     start_time = time.time()
