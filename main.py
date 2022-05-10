@@ -11,18 +11,17 @@ import utils
 import numpy as np
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
-
-
 from get_images import generate_denoiser_images
+
 
 def get_noise(data, min_sigma, max_sigma, device):
     noise = torch.randn_like(data, device=device)
     n = noise.shape[0]
-    #noise_tensor_array = (max_sigma - min_sigma) * torch.rand(n, device=device) + min_sigma
-    noise_tensor_array = 0.5 * torch.ones(size=(n,), device=device) + 0.2 * torch.randint(low=0, high=2, size=(n,), device=device)
+    noise_tensor_array = (max_sigma - min_sigma) * torch.rand(n, device=device) + min_sigma
     for i in range(n):
         noise.data[i] = noise.data[i] * noise_tensor_array[i];
     return noise, noise_tensor_array
+
 
 def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path, criterion, testloader, device):
     print('==> Saving analysis figure..')
@@ -89,27 +88,22 @@ def save_loss_figure(train_loss_lst, test_loss_lst, save_path, epochs):
     plt.savefig(save_path + "/loss.png", bbox_inches='tight')
 
 
-def train(model, sigma, epoch, criterion, optimizer, trainloader, device, use_multiple_noise_level = False):
+def train(model, sigma, epoch, criterion, optimizer, trainloader, device,  sigma_min, sigma_max, use_multiple_noise_level=False):
     print('\nEpoch: %d' % epoch)
     model.train()
     train_loss = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs = inputs.to(device)
         if use_multiple_noise_level:
-            #sigma_i =sigma + 0.2*torch.randint(low=0, high=2, size=(1,),device=device)
-            #noise = torch.randn_like(inputs, device=device)*(sigma_i)
-            noise, noise_tensor_array = get_noise(inputs, 0, 1, device)
+            noise, noise_tensor_array = get_noise(inputs, sigma_min, sigma_max, device)
         else:
-            sigma_i = sigma
-            noise = torch.randn_like(inputs, device=device)*sigma_i
+            noise = torch.randn_like(inputs, device=device)*sigma
         noisy_inputs = inputs + noise
         optimizer.zero_grad()
         if use_multiple_noise_level:
-            print(inputs.size(2))
-            print(noise_tensor_array.unsqueeze(3).size())
-            outputs = model(torch.div(noisy_inputs, 2 * torch.square(noise_tensor_array).unsqueeze(3).repeat(1, 1, inputs.size(2), inputs.size(3))))
+            outputs = model(torch.div(noisy_inputs, 2 * torch.square(noise_tensor_array).unsqueeze(1).unsqueeze(2).unsqueeze(3).repeat(1, 1, inputs.size(2), inputs.size(3))))
         else:
-            outputs = model(noisy_inputs/(2*(sigma_i**2)))
+            outputs = model(noisy_inputs/(2*(sigma**2)))
         loss = criterion(outputs, inputs)
         loss.backward()
         optimizer.step()
@@ -120,23 +114,22 @@ def train(model, sigma, epoch, criterion, optimizer, trainloader, device, use_mu
     return train_loss/(batch_idx+1)
 
 
-def test(model, sigma, criterion, testloader, device, use_multiple_noise_level = False):
+def test(model, sigma, criterion, testloader, device, sigma_min, sigma_max, use_multiple_noise_level=False):
     model.eval()
     test_loss = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs = inputs.to(device)
             if use_multiple_noise_level:
-                noise = torch.randn_like(inputs, device=device) * sigma
-                noisy_inputs = inputs + noise
-                outputs = model(noisy_inputs / (2 * (sigma ** 2)))
-                loss = criterion(outputs, inputs)
-                test_loss += 0.5*loss.item()
-                noise = torch.randn_like(inputs, device=device) * (sigma + 0.2)
-                noisy_inputs = inputs + noise
-                outputs = model(noisy_inputs / (2 * (sigma ** 2)))
-                loss = criterion(outputs, inputs)
-                test_loss += 0.5 * loss.item()
+                N = 20
+                sigma_arr = np.linspace(sigma_min, sigma_max, num=N)
+                sigma_lst = list(sigma_arr)
+                for sigma_i in sigma_lst:
+                    noise = torch.randn_like(inputs, device=device) * sigma_i
+                    noisy_inputs = inputs + noise
+                    outputs = model(noisy_inputs / (2 * (sigma_i ** 2)))
+                    loss = criterion(outputs, inputs)
+                    test_loss += 1/N*loss.item()
             else:
                 noise = torch.randn_like(inputs, device=device) * sigma
                 noisy_inputs = inputs + noise
@@ -178,8 +171,10 @@ def main():
     parser.add_argument('--results-dir', type=str, default="TMP",
                         help='Results dir name')
     parser.add_argument('--sigma', default=0.5, type=float, help='noise std')
-    parser.add_argument('--sigma_min', default=0.2, type=float, help='analysis noise std min')
-    parser.add_argument('--sigma_max', default=1, type=float, help='analysis noise std max')
+    parser.add_argument('--sigma_min_analysis', default=0.1, type=float, help='analysis noise std min')
+    parser.add_argument('--sigma_max_analysis', default=1000, type=float, help='analysis noise std max')
+    parser.add_argument('--sigma_min_train', default=0.1, type=float, help='training noise std min')
+    parser.add_argument('--sigma_max_train', default=1, type=float, help='training noise std max')
     parser.add_argument('--use-multiple-noise-level', action='store_true', default=False,
                         help='use multiple noise level')
     args = parser.parse_args()
@@ -226,8 +221,8 @@ def main():
     train_loss_lst = []
     test_loss_lst = []
     for epoch in range(args.epochs):
-        train_loss = train(model, args.sigma, epoch, criterion, optimizer, train_loader, device, args.use_multiple_noise_level)
-        test_loss = test(model, args.sigma, criterion, test_loader, device)
+        train_loss = train(model, args.sigma, epoch, criterion, optimizer, train_loader, device, args.sigma_min_train, args.sigma_max_train, args.use_multiple_noise_level)
+        test_loss = test(model, args.sigma, criterion, test_loader, device, args.sigma_min_train, args.sigma_max_train, args.use_multiple_noise_level)
         train_loss_lst.append(train_loss)
         test_loss_lst.append(test_loss)
 
@@ -235,10 +230,11 @@ def main():
         torch.save(model.state_dict(), save_path + "/mnist_denoiser.pt")
 
     save_loss_figure(train_loss_lst, test_loss_lst, save_path, args.epochs)
-    save_analysis_plot_denoiser_residual(model, args.sigma_min, args.sigma_max, save_path, criterion, test_loader, device)
+    save_analysis_plot_denoiser_residual(model, args.sigma_min_analysis, args.sigma_max_analysis, save_path, criterion, test_loader, device)
 
-    for sigma_for_generation in np.logspace(0,-2,10):
-        generate_denoiser_images(test_loader, [model], sigma = sigma_for_generation, device = device, path = save_path,  labels = ["mnist_denoiser"], img_idxes = None)
+    for sigma_for_generation in np.logspace(3, -2, 10):
+        generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, path=save_path, labels=["mnist_denoiser"], img_idxes=None)
+
 
 if __name__ == '__main__':
     start_time = time.time()
