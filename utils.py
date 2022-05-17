@@ -1,6 +1,22 @@
 import torch
 import numpy as np
 import random
+import math
+from PIL import Image
+
+
+def tensor_to_image(x):
+    ndarr = x.squeeze(dim=0).mul_(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).squeeze().to('cpu', torch.uint8).numpy()
+    image = Image.fromarray(ndarr)
+    return image
+
+
+def compute_psnr(x, y):
+    x = np.array(tensor_to_image(x)).astype(np.float64)
+    y = np.array(tensor_to_image(y)).astype(np.float64)
+
+    mse = np.mean((x - y) ** 2)
+    return 20 * math.log10(255.0 / math.sqrt(mse))
 
 
 def set_seed(seed, fully_deterministic=True):
