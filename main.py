@@ -35,7 +35,9 @@ def get_noise(data, min_sigma, max_sigma, device):
 
 def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path_d, dir_name, criterion, gray_scale, testloader, device):
     print('==> Saving analysis figure..')
-    save_path = os.path.join(save_path_d,"/"+ "/")
+    print(save_path_d)
+    save_path = os.path.join(save_path_d,dir_name + "/")
+
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     model.eval()
@@ -44,13 +46,14 @@ def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path_
     res_norm_lst = []
     noise_norm_lst = []
     mse_lst = []
+    psnr_lst = []
+
     with torch.no_grad():
         for sigma in sigma_lst:
             res_norm = []
-            noise_norm = []
-            psnr_lst = []
             test_loss = 0
             psnr = 0
+            noise_norm = []
             for batch_idx, (inputs, targets) in enumerate(testloader):
                 inputs = inputs.to(device)
                 noise = torch.randn_like(inputs, device=device) * sigma
@@ -61,12 +64,16 @@ def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path_
                 loss = criterion(outputs, inputs)
                 test_loss += loss.item()
                 psnr += utils.compute_psnr(outputs, inputs)
+
+
+            ##import pdb; pdb.set_trace()
             mse_lst.append(test_loss / (batch_idx + 1))
             psnr_lst.append(psnr/ (batch_idx + 1))
             res_norm = np.concatenate(res_norm, axis=0)
             noise_norm = np.concatenate(noise_norm, axis=0) #np.asarray(noise_norm)
             res_norm_lst.append(np.mean(res_norm))
             noise_norm_lst.append(np.mean(noise_norm))
+
     res_norm_arr = np.asarray(res_norm_lst)
     noise_norm_arr = np.asarray(noise_norm_lst)
     mse_arr = np.asarray(mse_lst)
@@ -202,6 +209,11 @@ def main():
                         help='For Saving the current Model')
     parser.add_argument('--results-dir', type=str, default="TMP",
                         help='Results dir name')
+
+    parser.add_argument('--dataset-dir', type=str, default="/home/chen/Simulations/spherical_image_denoiser",
+                        help='dataset dir path')
+
+
     parser.add_argument('--sigma', default=0.5, type=float, help='noise std')
     parser.add_argument('--sigma_min_analysis', default=0.001, type=float, help='analysis noise std min')
     parser.add_argument('--sigma_max_analysis', default=1, type=float, help='analysis noise std max')
@@ -279,17 +291,19 @@ def main():
                 batch_size=args.test_batch_size, shuffle=True, **kwargs)
             val_loader = None
         else:
+
+            
             if args.dataset == 'ds_bsd':
                 dataset_train = DatasetBSD(
-                    root=os.path.join('/home/chen/Simulations/spherical_image_denoiser/BSD500', 'train'),
+                    root=os.path.join(args.dataset_dir + '/BSD500', 'train'),
                     training=True,
                     normilized_image=True, new_norm=new_norm, crop_size=80, gray_scale=False, transpose=True)
                 dataset_test = DatasetBSD(
-                    root=os.path.join('/home/chen/Simulations/spherical_image_denoiser/BSD500', 'val'),
+                    root=os.path.join(args.dataset_dir + '/BSD500', 'val'),
                     training=True,
                     normilized_image=True, new_norm=new_norm, crop_size=80, gray_scale=False, transpose=True)
                 dataset_val = DatasetBSD68(
-                    root='/home/chen/Simulations/spherical_image_denoiser/BSD68',
+                    root=args.dataset_dir + '/BSD68',
                     normilized_image=True, new_norm=new_norm, gray_scale=False, transpose=True)
                 # loaders
                 train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, **kwargs)
@@ -331,9 +345,9 @@ def main():
     else:
         save_analysis_plot_denoiser_residual(model, args.sigma_min_analysis, args.sigma_max_analysis, save_path, 'BSD68', criterion, gray_scale, val_loader, device)
 
-    if gray_scale:
-        for sigma_for_generation in np.logspace(1, -2, 10):
-            generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, path=save_path, labels=["mnist_denoiser"], img_idxes=None)
+    for sigma_for_generation in np.logspace(1, -2, 10):
+        generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, 
+                                 path=save_path, labels=["mnist_denoiser"], img_idxes=None, gray_scale = gray_scale)
 
 
 if __name__ == '__main__':
