@@ -5,7 +5,7 @@ from ed import *
 import matplotlib.pyplot as plt
 
 
-def generate_denoiser_images(dl, models, sigma, device, path=None, labels=[], img_idxes=None, dataset = "mnist", gray_scale = True):
+def generate_denoiser_images(dl, models, sigma, device, path=None, labels=[], img_idxes=None, dataset = "mnist", gray_scale = True, baseline = False):
     if img_idxes is None:
         img_idxes = torch.randint(0, 100, [5])
 
@@ -23,7 +23,10 @@ def generate_denoiser_images(dl, models, sigma, device, path=None, labels=[], im
         outs = []
         for model in models:
             with torch.no_grad():
-                res = model(img + noise)                
+                if baseline:
+                    res = model(img + noise)              
+                else:
+                    res = model((img + noise)/(2*(sigma**2)))                
                 outs.append(res.squeeze().cpu())
 
         noise = noise.squeeze().cpu()

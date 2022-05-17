@@ -302,9 +302,8 @@ def main():
     save_loss_figure(train_loss_lst, test_loss_lst, save_path, args.epochs)
     save_analysis_plot_denoiser_residual(model, args.sigma_min_analysis, args.sigma_max_analysis, save_path, criterion, gray_scale, test_loader, device)
 
-    if gray_scale:
-        for sigma_for_generation in np.logspace(1, -2, 10):
-            generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, path=save_path, labels=["mnist_denoiser"], img_idxes=None)
+    for sigma_for_generation in np.logspace(1, -2, 10):
+        generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, path=save_path, labels=["mnist_denoiser"], img_idxes=None, baseline = True, gray_scale = gray_scale)
 
 
 if __name__ == '__main__':

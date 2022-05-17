@@ -347,7 +347,7 @@ def main():
 
     for sigma_for_generation in np.logspace(1, -2, 10):
         generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, 
-                                 path=save_path, labels=["mnist_denoiser"], img_idxes=None, gray_scale = gray_scale)
+                                 path=save_path, labels=["mnist_denoiser"], img_idxes=None, gray_scale = gray_scale, baseline = False)
 
 
 if __name__ == '__main__':
