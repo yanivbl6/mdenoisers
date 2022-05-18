@@ -278,14 +278,14 @@ def main():
                 dataset_train = DatasetBSD(
                     root=os.path.join('/home/chen/Simulations/spherical_image_denoiser/BSD500', 'train'),
                     training=True,
-                    normilized_image=True, new_norm=new_norm, crop_size=80, gray_scale=False, transpose=True)
+                    normilized_image=False, new_norm=new_norm, crop_size=80, gray_scale=False, transpose=True)
                 dataset_test = DatasetBSD(
                     root=os.path.join('/home/chen/Simulations/spherical_image_denoiser/BSD500', 'val'),
                     training=True,
-                    normilized_image=True, new_norm=new_norm, crop_size=80, gray_scale=False, transpose=True)
+                    normilized_image=False, new_norm=new_norm, crop_size=80, gray_scale=False, transpose=True)
                 dataset_val = DatasetBSD68(
                     root='/home/chen/Simulations/spherical_image_denoiser/BSD68',
-                    normilized_image=True, new_norm=new_norm, gray_scale=False, transpose=True)
+                    normilized_image=False, new_norm=new_norm, gray_scale=False, transpose=True)
                 # loaders
                 train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True,
                                                            **kwargs)
@@ -333,6 +333,7 @@ def main():
     for sigma_for_generation in np.logspace(1, -2, 10):
         generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, path=save_path,
                                  labels=["mnist_denoiser"], img_idxes=None, baseline=True, gray_scale=gray_scale)
+
 
 if __name__ == '__main__':
     start_time = time.time()
