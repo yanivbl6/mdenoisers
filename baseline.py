@@ -11,7 +11,7 @@ from models import DnCNN
 import utils
 import numpy as np
 import matplotlib.pyplot as plt
-from dataset import DatasetBSD
+from dataset import DatasetBSD, DatasetBSD68
 plt.switch_backend('agg')
 from get_images import generate_denoiser_images
 
@@ -33,19 +33,24 @@ def get_noise(data, min_sigma, max_sigma, device):
     return noise, noise_tensor_array
 
 
-def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path, criterion, gray_scale, testloader, device):
+def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path_d, dir_name, criterion, gray_scale, testloader, device):
     print('==> Saving analysis figure..')
+    save_path = os.path.join(save_path_d, dir_name + "/")
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
     model.eval()
     sigma_arr = np.linspace(sigma_min, sigma_max, num=20)
     sigma_lst = list(sigma_arr)
     res_norm_lst = []
     noise_norm_lst = []
     mse_lst = []
+    psnr_lst = []
     with torch.no_grad():
         for sigma in sigma_lst:
             res_norm = []
             noise_norm = []
             test_loss = 0
+            psnr = 0
             for batch_idx, (inputs, targets) in enumerate(testloader):
                 inputs = inputs.to(device)
                 noise = torch.randn_like(inputs, device=device) * sigma
@@ -55,7 +60,9 @@ def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path,
                 noise_norm.append(calc_norm(noise, gray_scale).cpu().detach().numpy())
                 loss = criterion(outputs, inputs)
                 test_loss += loss.item()
+                psnr += utils.compute_psnr(outputs, inputs)
             mse_lst.append(test_loss / (batch_idx + 1))
+            psnr_lst.append(psnr/ (batch_idx + 1))
             res_norm = np.concatenate(res_norm, axis=0)
             noise_norm = np.concatenate(noise_norm, axis=0) #np.asarray(noise_norm)
             res_norm_lst.append(np.mean(res_norm))
@@ -63,9 +70,11 @@ def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path,
     res_norm_arr = np.asarray(res_norm_lst)
     noise_norm_arr = np.asarray(noise_norm_lst)
     mse_arr = np.asarray(mse_lst)
+    psnr_arr = np.asarray(psnr_lst)
     np.save(save_path + '/res_norm_arr.npy',  res_norm_arr)
     np.save(save_path + '/noise_norm_arr.npy', noise_norm_arr)
     np.save(save_path + '/mse_arr.npy', mse_arr)
+    np.save(save_path + '/psnr_arr.npy', psnr_arr)
     sigma_arr = np.asarray(sigma_lst)
     plt.figure()
     plt.plot(sigma_arr, res_norm_arr, label='Residual', marker='o',)
@@ -80,6 +89,12 @@ def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path,
     plt.ylabel('MSE')
     plt.xlabel('Noise std')
     plt.savefig(save_path + "/MSE.png", bbox_inches='tight')
+    plt.figure()
+    plt.plot(sigma_arr, psnr_arr, label='Test PSNR')
+    plt.legend()
+    plt.ylabel('PSNR')
+    plt.xlabel('Noise std')
+    plt.savefig(save_path + "/psnr.png", bbox_inches='tight')
 
 
 def save_loss_figure(train_loss_lst, test_loss_lst, save_path, epochs):
@@ -264,13 +279,20 @@ def main():
                     root=os.path.join('/home/chen/Simulations/spherical_image_denoiser/BSD500', 'train'),
                     training=True,
                     normilized_image=True, new_norm=new_norm, crop_size=80, gray_scale=False, transpose=True)
-                dataset_val = DatasetBSD(
+                dataset_test = DatasetBSD(
                     root=os.path.join('/home/chen/Simulations/spherical_image_denoiser/BSD500', 'val'),
                     training=True,
                     normilized_image=True, new_norm=new_norm, crop_size=80, gray_scale=False, transpose=True)
+                dataset_val = DatasetBSD68(
+                    root='/home/chen/Simulations/spherical_image_denoiser/BSD68',
+                    normilized_image=True, new_norm=new_norm, gray_scale=False, transpose=True)
                 # loaders
-                train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, **kwargs)
-                test_loader = torch.utils.data.DataLoader(dataset_val, batch_size=args.test_batch_size, shuffle=True, **kwargs)
+                train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True,
+                                                           **kwargs)
+                test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=args.test_batch_size, shuffle=True,
+                                                          **kwargs)
+                val_loader = torch.utils.data.DataLoader(dataset_val, batch_size=args.test_batch_size, shuffle=True,
+                                                         **kwargs)
 
     print('==> Building model..')
     if args.dataset == 'ds_bsd':
@@ -300,11 +322,17 @@ def main():
         torch.save(model.state_dict(), save_path + "/mnist_denoiser.pt")
 
     save_loss_figure(train_loss_lst, test_loss_lst, save_path, args.epochs)
-    save_analysis_plot_denoiser_residual(model, args.sigma_min_analysis, args.sigma_max_analysis, save_path, criterion, gray_scale, test_loader, device)
+    save_analysis_plot_denoiser_residual(model, args.sigma_min_analysis, args.sigma_max_analysis, save_path, 'BSD500', criterion, gray_scale, test_loader, device)
 
-    if gray_scale:
-        for sigma_for_generation in np.logspace(1, -2, 10):
-            generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, path=save_path, labels=["mnist_denoiser"], img_idxes=None)
+    if val_loader == None:
+        pass
+    else:
+        save_analysis_plot_denoiser_residual(model, args.sigma_min_analysis, args.sigma_max_analysis, save_path,
+                                             'BSD68', criterion, gray_scale, val_loader, device)
+
+    for sigma_for_generation in np.logspace(1, -2, 10):
+        generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, path=save_path,
+                                 labels=["mnist_denoiser"], img_idxes=None, baseline=True, gray_scale=gray_scale)
 
 
 if __name__ == '__main__':

@@ -6,8 +6,7 @@ from PIL import Image
 
 
 def tensor_to_image(x):
-    ndarr = x.squeeze(dim=0).mul_(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).squeeze().to('cpu', torch.uint8).numpy()
-    image = Image.fromarray(ndarr)
+    image = x.mul_(255).add_(0.5).clamp_(0, 255).to('cpu', torch.uint8).numpy()
     return image
 
 

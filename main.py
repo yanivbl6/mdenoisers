@@ -35,7 +35,7 @@ def get_noise(data, min_sigma, max_sigma, device):
 
 def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path_d, dir_name, criterion, gray_scale, testloader, device):
     print('==> Saving analysis figure..')
-    save_path = os.path.join(save_path_d,"/"+ "/")
+    save_path = os.path.join(save_path_d,dir_name + "/")
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     model.eval()
@@ -44,11 +44,11 @@ def save_analysis_plot_denoiser_residual(model, sigma_min, sigma_max, save_path_
     res_norm_lst = []
     noise_norm_lst = []
     mse_lst = []
+    psnr_lst = []
     with torch.no_grad():
         for sigma in sigma_lst:
             res_norm = []
             noise_norm = []
-            psnr_lst = []
             test_loss = 0
             psnr = 0
             for batch_idx, (inputs, targets) in enumerate(testloader):
@@ -325,15 +325,16 @@ def main():
         torch.save(model.state_dict(), save_path + "/mnist_denoiser.pt")
 
     save_loss_figure(train_loss_lst, test_loss_lst, save_path, args.epochs)
-    save_analysis_plot_denoiser_residual(model, args.sigma_min_analysis, args.sigma_max_analysis, save_path, 'BSD500',criterion, gray_scale, test_loader, device)
+    save_analysis_plot_denoiser_residual(model, args.sigma_min_analysis, args.sigma_max_analysis, save_path, str(dataset),criterion, gray_scale, test_loader, device)
     if val_loader == None:
         pass
     else:
         save_analysis_plot_denoiser_residual(model, args.sigma_min_analysis, args.sigma_max_analysis, save_path, 'BSD68', criterion, gray_scale, val_loader, device)
 
-    if gray_scale:
-        for sigma_for_generation in np.logspace(1, -2, 10):
-            generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, path=save_path, labels=["mnist_denoiser"], img_idxes=None)
+    for sigma_for_generation in np.logspace(1, -2, 10):
+        generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device,
+                                 path=save_path, labels=["mnist_denoiser"], img_idxes=None, gray_scale=gray_scale,
+                                 baseline=False)
 
 
 if __name__ == '__main__':

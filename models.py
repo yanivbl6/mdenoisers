@@ -27,7 +27,7 @@ class dbl_FC(nn.Module):
         d_size = input_size * input_size
         super(dbl_FC, self).__init__()
         self.depth = layers
-        self.linops = nn.ModuleList([nn.Linear(d_size, d_size, bias=False) for _ in range(layers)])
+        self.linops = nn.ModuleList([nn.Linear(d_size, d_size, bias=True) for _ in range(layers)])
 
         for i, linop in enumerate(self.linops):
             torch.nn.init.eye_(self.linops[i].weight)

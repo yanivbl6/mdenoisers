@@ -5,9 +5,9 @@ from ed import *
 import matplotlib.pyplot as plt
 
 
-def generate_denoiser_images(dl, models, sigma, device, path=None, labels=[], img_idxes=None):
+def generate_denoiser_images(dl, models, sigma, device, path=None, labels=[], img_idxes=None, dataset = "mnist", gray_scale = True, baseline = False):
     if img_idxes is None:
-        img_idxes = torch.randint(0, 100, [10])
+        img_idxes = torch.randint(0, 100, [5])
 
     if not isinstance(models, list):
         models = [models]
@@ -23,7 +23,11 @@ def generate_denoiser_images(dl, models, sigma, device, path=None, labels=[], im
         outs = []
         for model in models:
             with torch.no_grad():
-                outs.append(model(img + noise).squeeze().cpu())
+                if baseline:
+                    res = model(img + noise)
+                else:
+                    res = model((img + noise)/(2*(sigma**2)))
+                outs.append(res.squeeze().cpu())
 
         noise = noise.squeeze().cpu()
         img = img.squeeze().cpu()
@@ -33,12 +37,21 @@ def generate_denoiser_images(dl, models, sigma, device, path=None, labels=[], im
 
         vmin = -1
         vmax = 2
-        axs[0, i].imshow(img, vmin=vmin, vmax=vmax, cmap='Greys')
 
-        axs[1, i].imshow(img + noise, vmin=vmin, vmax=vmax, cmap='Greys')
 
-        for k in range(len(models)):
-            axs[k + 2, i].imshow(outs[k], vmin=vmin, vmax=vmax, cmap='Greys')
+        if gray_scale:
+            axs[0, i].imshow(img, vmin=vmin, vmax=vmax, cmap='Greys')
+            axs[1, i].imshow((img + noise), vmin=vmin, vmax=vmax, cmap='Greys')
+
+            for k in range(len(models)):
+                axs[k + 2, i].imshow(outs[k], vmin=vmin, vmax=vmax, cmap='Greys')
+
+        else:
+            axs[0, i].imshow(img.permute(1,2,0), vmin=vmin, vmax=vmax, cmap='Greys')
+            axs[1, i].imshow((img + noise).permute(1,2,0), vmin=vmin, vmax=vmax, cmap='Greys')
+
+            for k in range(len(models)):
+                axs[k + 2, i].imshow(outs[k].permute(1,2,0), vmin=vmin, vmax=vmax, cmap='Greys')
 
         #         axs[3,i].imshow(noise, vmin=vmin, vmax=vmax, cmap='Greys')
         #         axs[4,i].imshow(img-out, vmin=vmin, vmax=vmax, cmap='Greys')
