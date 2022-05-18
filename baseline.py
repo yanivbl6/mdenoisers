@@ -334,7 +334,6 @@ def main():
         generate_denoiser_images(test_loader, [model], sigma=sigma_for_generation, device=device, path=save_path,
                                  labels=["mnist_denoiser"], img_idxes=None, baseline=True, gray_scale=gray_scale)
 
-
 if __name__ == '__main__':
     start_time = time.time()
     main()
